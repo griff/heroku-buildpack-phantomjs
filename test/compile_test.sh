@@ -31,11 +31,29 @@ testInstallVersion2() {
     "$(phantomjs ${BUILD_DIR}/vendor/phantomjs/examples/useragent.js)"
 }
 
-
 testWrongVersion() {
   echo "3.0" > $ENV_DIR/PHANTOMJS_VERSION
   compile
 
   assertCapturedError 1 "Unsupported PhantomJS version: 3.0"
   assertFalse "Doesn't install phantomjs" "[ -x ${BUILD_DIR}/vendor/phantomjs/bin/phantomjs ]"
+}
+
+testInstallCrossTargetOS() {
+  export TARGET_OS="WINDOWS"
+  compile
+  unset TARGET_OS
+
+  assertCapturedSuccess
+  assertTrue "Installs phantomjs" "[ -f ${BUILD_DIR}/vendor/phantomjs/bin/phantomjs.exe ]"
+  assertTrue "Profile.d file is created" "[ -f ${BUILD_DIR}/.profile.d/phantomjs.sh ]"
+}
+
+testInstallCrossPhantomJsOS() {
+  echo "WINDOWS" > $ENV_DIR/PHANTOMJS_OS
+  compile
+
+  assertCapturedSuccess
+  assertTrue "Installs phantomjs" "[ -f ${BUILD_DIR}/vendor/phantomjs/bin/phantomjs.exe ]"
+  assertTrue "Profile.d file is created" "[ -f ${BUILD_DIR}/.profile.d/phantomjs.sh ]"
 }
