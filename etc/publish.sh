@@ -1,3 +1,6 @@
+#!/bin/sh
+
+set -e
 
 WINDOWS_1_9_URL="https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-windows.zip"
 WINDOWS_1_9_DIR="phantomjs-1.9.8-windows"
@@ -38,4 +41,4 @@ make_tar DARWIN_1_9
 make_tar LINUX_2_0 phantomjs-2.0.0-20141016-u1404-x86_64
 make_tar DARWIN_2_0 phantomjs-2.0.0-20141016-macosx
 
-scp -r out zev.maven-group.org:maven/www/default/phantomjs
+scp -r out/* zev.maven-group.org:maven/www/default/phantomjs
