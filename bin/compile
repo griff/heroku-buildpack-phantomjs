@@ -34,6 +34,7 @@ PHANTOMJS_URL_2_0_DARWIN=${PHANTOMJS_URL_2_0_DARWIN:-"https://maven-group.org/ph
 
 PHANTOMJS_URL_1_9_LINUX=${PHANTOMJS_URL_1_9_LINUX:-"https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-linux-x86_64.tar.bz2"}
 PHANTOMJS_URL_2_0_LINUX=${PHANTOMJS_URL_2_0_LINUX:-"https://maven-group.org/phantomjs/phantomjs-2.0.0-20141016-u1404-x86_64.tar.bz2"}
+PHANTOMJS_ICU_2_0_LINUX="http://us.archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu52_52.1-3_amd64.deb"
 
 _get_os_suffix() {
   case "$(uname)" in
@@ -97,31 +98,39 @@ version_var_name="$(echo $PHANTOMJS_VERSION | tr '.' '_')"
 if [ -z "$PHANTOMJS_URL" ]; then
   PHANTOMJS_URL="$(eval echo \${PHANTOMJS_URL_$version_var_name})"
 fi
-echo $PHANTOMJS_URL
 
 FILE_NAME="${PHANTOMJS_URL%*?}"
 FILE_NAME="${FILE_NAME##*/}"
 
 mkdir -p $CACHE_DIR
-echo $CACHE_DIR/$FILE_NAME
 if ! [ -e $CACHE_DIR/$FILE_NAME ]; then
   echo "-----> Fetching PhantomJS ${PHANTOMJS_VERSION} binaries at ${PHANTOMJS_URL}"
-  curl $PHANTOMJS_URL --location --fail -o $CACHE_DIR/$FILE_NAME
+  curl $PHANTOMJS_URL --location --fail --silent --show-error -o $CACHE_DIR/$FILE_NAME
 fi
 
-echo "-----> Extracting PhantomJS ${PHANTOMJS_VERSION} binaries to ${BUILD_DIR}/vendor/phantomjs"
+echo "-----> Extracting PhantomJS ${PHANTOMJS_VERSION} binaries"
 mkdir -p $BUILD_DIR/vendor/phantomjs
 tar jx --strip=1 -f $CACHE_DIR/$FILE_NAME -C $BUILD_DIR/vendor/phantomjs
+
+PHANTOMJS_ICU="$(eval echo \$PHANTOMJS_ICU_${version_var_name}_$PHANTOMJS_OS)"
+if [ -n "$PHANTOMJS_ICU" ]; then
+  echo "-----> Downloading ICU ${PHANTOMJS_ICU}"
+  curl --location --fail --silent --show-error -o $CACHE_DIR/libicu52_52.1-3_amd64.deb $PHANTOMJS_ICU
+  echo "-----> Installing ICU"
+  dpkg -x $CACHE_DIR/libicu52_52.1-3_amd64.deb $BUILD_DIR/vendor/phantomjs
+fi
 
 echo "-----> exporting PATH"
 PROFILE_PATH="$BUILD_DIR/.profile.d/phantomjs.sh"
 mkdir -p $(dirname $PROFILE_PATH)
 cat << EOF > $PROFILE_PATH
 export PATH="\$HOME/vendor/phantomjs/bin:\$PATH"
+export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH:\$HOME/vendor/phantomjs/usr/lib/x86_64-linux-gnu"
 EOF
 
 if [ -w ${bp_dir} ]; then
   cat << EOF > ${bp_dir}/export
 export PATH=$BUILD_DIR/vendor/phantomjs/bin:\$PATH
+export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH:$BUILD_DIR/vendor/phantomjs/usr/lib/x86_64-linux-gnu"
 EOF
 fi
