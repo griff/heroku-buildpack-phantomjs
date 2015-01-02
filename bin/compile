@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+# fail fast
+set -e
+
+bp_dir=$(cd $(dirname $0); cd ..; pwd)
+
+# parse args
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+export_env_dir() {
+  env_dir=$1
+  whitelist_regex=${2:-''}
+  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH|JAVA_OPTS)$'}
+  if [ -d "$env_dir" ]; then
+    for e in $(ls $env_dir); do
+      echo "$e" | grep -E "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
+      export "$e=$(cat $env_dir/$e)"
+      :
+    done
+  fi
+}
+export_env_dir "$ENV_DIR" "^PHANTOMJS_"
+
+DEFAULT_PHANTOMJS_VERSION=1.9
+PHANTOMJS_URL_1_9_WINDOWS=${PHANTOMJS_URL_1_9_WINDOWS:-"https://maven-group.org/phantomjs/phantomjs-1.9.8-windows.tar.bz2"}
+PHANTOMJS_URL_2_0_WINDOWS=${PHANTOMJS_URL_2_0_WINDOWS:-"https://maven-group.org/phantomjs/phantomjs-2.0.0-windows.tar.bz2"}
+
+PHANTOMJS_URL_1_9_DARWIN=${PHANTOMJS_URL_1_9_DARWIN:-"https://maven-group.org/phantomjs/phantomjs-1.9.8-macosx.tar.bz2"}
+PHANTOMJS_URL_2_0_DARWIN=${PHANTOMJS_URL_2_0_DARWIN:-"https://maven-group.org/phantomjs/phantomjs-2.0.0-20141016-macosx.tar.bz2"}
+
+PHANTOMJS_URL_1_9_LINUX=${PHANTOMJS_URL_1_9_LINUX:-"https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-linux-x86_64.tar.bz2"}
+PHANTOMJS_URL_2_0_LINUX=${PHANTOMJS_URL_2_0_LINUX:-"https://maven-group.org/phantomjs/phantomjs-2.0.0-20141016-u1404-x86_64.tar.bz2"}
+
+_get_os_suffix() {
+  case "$(uname)" in
+    Darwin)
+      echo "DARWIN"
+      ;;
+    MINGW32_*)
+      echo "WINDOWS"
+      ;;
+    *)
+      echo "LINUX"
+      ;;
+  esac
+}
+if [ -z "$PHANTOMJS_OS" ]; then
+  PHANTOMJS_OS=${TARGET_OS:-"$(_get_os_suffix)"}
+fi
+PHANTOMJS_URL_1_9=${PHANTOMJS_URL_1_9:-"$(eval echo \$PHANTOMJS_URL_1_9_$PHANTOMJS_OS)"}
+PHANTOMJS_URL_2_0=${PHANTOMJS_URL_2_0:-"$(eval echo \$PHANTOMJS_URL_2_0_$PHANTOMJS_OS)"}
+PHANTOMJS_VERSION=${PHANTOMJS_VERSION:-$DEFAULT_PHANTOMJS_VERSION}
+
+is_supported_version() {
+  phantomJsVersion=$1
+  case "${phantomJsVersion}" in
+    2.0)
+      echo "true"
+      ;;
+    1.9)
+      echo "true"
+      ;;
+    *)
+      echo "false"
+      ;;
+  esac
+}
+
+error() {
+  echo
+  echo " !     ERROR: $*" | indent no_first_line_indent
+  echo
+  exit 1
+}
+
+# sed -l basically makes sed replace and buffer through stdin to stdout
+# so you get updates while the command runs and dont wait for the end
+# e.g. npm install | indent
+indent() {
+  # if an arg is given it's a flag indicating we shouldn't indent the first line, so use :+ to tell SED accordingly if that parameter is set, otherwise null string for no range selector prefix (it selects from line 2 onwards and then every 1st line, meaning all lines)
+  c="${1:+"2,999"} s/^/       /"
+  case $(uname) in
+    Darwin) sed -l "$c";; # mac/bsd sed: -l buffers on line boundaries
+    *)      sed -u "$c";; # unix/gnu sed: -u unbuffered (arbitrary) chunks of data
+  esac
+}
+
+if [ "$(is_supported_version ${PHANTOMJS_VERSION})" != "true" ]; then
+  error "Unsupported PhantomJS version: $PHANTOMJS_VERSION"
+fi
+version_var_name="$(echo $PHANTOMJS_VERSION | tr '.' '_')"
+
+if [ -z "$PHANTOMJS_URL" ]; then
+  PHANTOMJS_URL="$(eval echo \${PHANTOMJS_URL_$version_var_name})"
+fi
+echo $PHANTOMJS_URL
+
+FILE_NAME="${PHANTOMJS_URL%*?}"
+FILE_NAME="${FILE_NAME##*/}"
+
+mkdir -p $CACHE_DIR
+echo $CACHE_DIR/$FILE_NAME
+if ! [ -e $CACHE_DIR/$FILE_NAME ]; then
+  echo "-----> Fetching PhantomJS ${PHANTOMJS_VERSION} binaries at ${PHANTOMJS_URL}"
+  curl $PHANTOMJS_URL --location --fail -o $CACHE_DIR/$FILE_NAME
+fi
+
+echo "-----> Extracting PhantomJS ${PHANTOMJS_VERSION} binaries to ${BUILD_DIR}/vendor/phantomjs"
+mkdir -p $BUILD_DIR/vendor/phantomjs
+tar jx --strip=1 -f $CACHE_DIR/$FILE_NAME -C $BUILD_DIR/vendor/phantomjs
+
+echo "-----> exporting PATH"
+PROFILE_PATH="$BUILD_DIR/.profile.d/phantomjs.sh"
+mkdir -p $(dirname $PROFILE_PATH)
+cat << EOF > $PROFILE_PATH
+export PATH="\$HOME/vendor/phantomjs/bin:\$PATH"
+EOF
+
+if [ -w ${bp_dir} ]; then
+  cat << EOF > ${bp_dir}/export
+export PATH=$BUILD_DIR/vendor/phantomjs/bin:\$PATH
+EOF
+fi
