@@ -29,6 +29,10 @@ make_tar() (
       curl -L "$url" -o "$file"
     fi
     unzip "$file"
+    if ! [ -d "${dir}/bin" ]; then
+      mkdir -p "${dir}/bin"
+      mv ${dir}/*.exe "${dir}/bin"
+    fi
     mkdir -p "../out"
     tar cjf "../out/${out}" "${dir}/"
   fi
