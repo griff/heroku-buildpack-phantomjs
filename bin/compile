@@ -109,6 +109,7 @@ if ! [ -e $CACHE_DIR/$FILE_NAME ]; then
 fi
 
 echo "-----> Extracting PhantomJS ${PHANTOMJS_VERSION} binaries"
+rm -rf $BUILD_DIR/vendor/phantomjs
 mkdir -p $BUILD_DIR/vendor/phantomjs
 tar jx --strip=1 -f $CACHE_DIR/$FILE_NAME -C $BUILD_DIR/vendor/phantomjs
 
